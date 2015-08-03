@@ -8,6 +8,7 @@ This module contains an asynchronous replica of ``requests.api``, powered
 by gevent. All API methods return a ``Request`` instance (as opposed to
 ``Response``). A list of requests can be sent with ``map()``.
 """
+import traceback
 from functools import partial
 
 try:
@@ -72,6 +73,7 @@ class AsyncRequest(object):
                                                 self.url, **merged_kwargs)
         except Exception as e:
             self.exception = e
+            self.traceback = traceback.format_exc()
         return self
 
 
@@ -117,10 +119,12 @@ def map(requests, stream=False, size=None, exception_handler=None):
     ret = []
 
     for request in requests:
-        if request.response:
+        if request.response is not None:
             ret.append(request.response)
         elif exception_handler:
-            exception_handler(request, request.exception)
+            ret.append(exception_handler(request, request.exception))
+        else:
+            ret.append(None)
 
     return ret
 
@@ -141,7 +145,7 @@ def imap(requests, stream=False, size=2, exception_handler=None):
         return r.send(stream=stream)
 
     for request in pool.imap_unordered(send, requests):
-        if request.response:
+        if request.response is not None:
             yield request.response
         elif exception_handler:
             exception_handler(request, request.exception)
